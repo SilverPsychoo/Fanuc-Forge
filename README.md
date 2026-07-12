@@ -87,33 +87,6 @@ Abre el simulador desde GitHub Pages:
 
 **https://silverpsychoo.github.io/fanuc-forge/**
 
-No necesitas instalar Python ni mantener un servidor encendido.  
-Toda la aplicación se ejecuta directamente en el navegador.
-
----
-
-## Ejecución local
-
-### Opción rápida
-
-Abre `index.html` desde el navegador.
-
-### Con servidor local
-
-En Windows:
-
-```bat
-start_windows.bat
-```
-
-También puedes ejecutar:
-
-```bash
-python run_server.py
-```
-
-Después abre la dirección mostrada en la terminal.
-
 ---
 
 ## Controles
@@ -192,20 +165,6 @@ fanuc-forge/
 └── README.md
 ```
 
----
-
-## Próximas mejoras
-
-- Detección avanzada de colisiones.
-- Mordazas, fixtures y elementos de sujeción.
-- Compensación geométrica más precisa `G41/G42`.
-- Visualización mejorada de ciclos y cavidades.
-- Importación de modelos de pieza.
-- Más perfiles de controles FANUC.
-- Exportación de reportes de simulación.
-
----
-
 ## Contribuciones
 
 Las sugerencias y reportes de errores son bienvenidos.
@@ -219,8 +178,7 @@ Las sugerencias y reportes de errores son bienvenidos.
 
 ## Autor
 
-Desarrollado por **Jonathan Leonel Maldonado Delgado**  
-Ingeniería Mecatrónica — Universidad Politécnica de Victoria
+Desarrollado por **SilverPsycho**  
 
 GitHub: [@SilverPsychoo](https://github.com/SilverPsychoo)
 
@@ -234,8 +192,6 @@ No está afiliado, patrocinado ni respaldado por FANUC Corporation.
 ---
 
 <div align="center">
-
-Hecho con código G, café y demasiadas pruebas de trayectorias.
 
 </div>
 =======
