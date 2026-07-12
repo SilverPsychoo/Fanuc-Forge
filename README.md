@@ -8,7 +8,7 @@
 
 Editor, interpretación de código G, macros, coordenadas polares y simulación 2D/3D directamente desde el navegador.
 
-[Ver simulador](https://silverpsychoo.github.io/fanuc-forge/) · [Reportar un problema](../../issues) · [Solicitar una mejora](../../issues)
+[Ver simulador](https://silverpsychoo.github.io/Fanuc-Forge/) · [Reportar un problema](../../issues) · [Solicitar una mejora](../../issues)
 
 </div>
 
@@ -85,7 +85,7 @@ La compatibilidad puede variar según el control FANUC, las opciones instaladas 
 
 Abre el simulador desde GitHub Pages:
 
-**https://silverpsychoo.github.io/fanuc-forge/**
+**https://silverpsychoo.github.io/Fanuc-Forge/**
 
 ---
 
