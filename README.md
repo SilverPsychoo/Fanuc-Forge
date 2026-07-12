@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <div align="center">
 
 <img src="assets/logo.png" alt="FANUC Forge" width="150">
@@ -238,3 +239,7 @@ No está afiliado, patrocinado ni respaldado por FANUC Corporation.
 Hecho con código G, café y demasiadas pruebas de trayectorias.
 
 </div>
+=======
+# Fanuc-Forge
+Simulador CNC educacional 
+>>>>>>> 1c59334480521e04721d36c5b40ed720c3b70964
