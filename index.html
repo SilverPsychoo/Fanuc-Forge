@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#09131d">
+  <title>FANUC Forge — Simulador CNC FANUC</title>
+  <link rel="stylesheet" href="styles.css?v=4.3.0">
+</head>
+<body>
+  <div id="appRoot" class="app-root">
+    <header class="topbar">
+      <div class="brand" title="FANUC Forge">
+        <img class="brand-logo" src="assets/logo.png" alt="Logo FANUC Forge">
+        <div class="brand-copy"><strong>FANUC Forge</strong><span>Simulador CNC FANUC</span></div>
+      </div>
+
+      <nav class="menu-bar" aria-label="Menú principal">
+        <div class="menu">
+          <button class="menu-trigger" data-menu="fileMenu">Archivo</button>
+          <div id="fileMenu" class="menu-popover">
+            <button data-action="newProgram"><span>Nuevo programa</span><kbd>Ctrl+N</kbd></button>
+            <button data-action="openProgram"><span>Abrir programa…</span><kbd>Ctrl+O</kbd></button>
+            <button data-action="saveProgram"><span>Guardar programa .NC</span><kbd>Ctrl+S</kbd></button>
+            <div class="menu-separator"></div>
+            <button data-action="openProject"><span>Abrir proyecto…</span><kbd>Ctrl+Shift+O</kbd></button>
+            <button data-action="saveProject"><span>Guardar proyecto .FFCNC</span><kbd>Ctrl+Shift+S</kbd></button>
+            <button data-action="saveLocal"><span>Guardar recuperación local</span></button>
+            <button data-action="loadLocal"><span>Recuperar guardado local</span></button>
+          </div>
+        </div>
+        <div class="menu">
+          <button class="menu-trigger" data-menu="editMenu">Editar</button>
+          <div id="editMenu" class="menu-popover">
+            <button data-action="undo"><span>Deshacer</span><kbd>Ctrl+Z</kbd></button>
+            <button data-action="redo"><span>Rehacer</span><kbd>Ctrl+Y</kbd></button>
+            <div class="menu-separator"></div>
+            <button data-action="format"><span>Formatear programa</span><kbd>Alt+Shift+F</kbd></button>
+            <button data-action="autocomplete"><span>Mostrar autocompletado</span><kbd>Ctrl+Espacio</kbd></button>
+            <button data-action="selectAll"><span>Seleccionar todo</span><kbd>Ctrl+A</kbd></button>
+          </div>
+        </div>
+        <div class="menu">
+          <button class="menu-trigger" data-menu="setupMenu">Configuración</button>
+          <div id="setupMenu" class="menu-popover">
+            <button data-action="stockSetup"><span>Mesa, pieza y unidades…</span></button>
+            <button data-action="offsetSetup"><span>Ceros de pieza G54–G59…</span></button>
+            <button data-action="toolSetup"><span>Herramienta y correctores…</span></button>
+          </div>
+        </div>
+        <div class="menu">
+          <button class="menu-trigger" data-menu="simulationMenu">Simulación</button>
+          <div id="simulationMenu" class="menu-popover">
+            <button data-action="compile"><span>Validar y compilar</span><kbd>F7</kbd></button>
+            <button data-action="play"><span>Ejecutar / continuar</span><kbd>F5</kbd></button>
+            <button data-action="step"><span>Bloque a bloque</span><kbd>F10</kbd></button>
+            <button data-action="pause"><span>Pausar</span></button>
+            <button data-action="reset"><span>Reiniciar simulación</span><kbd>Ctrl+R</kbd></button>
+          </div>
+        </div>
+        <div class="menu">
+          <button class="menu-trigger" data-menu="viewMenu">Ver</button>
+          <div id="viewMenu" class="menu-popover">
+            <button data-action="fitView"><span>Ajustar pieza a pantalla</span><kbd>F</kbd></button>
+            <div class="menu-separator"></div>
+            <button data-action="toggleDock"><span>Mostrar/ocultar panel inferior</span><kbd>Ctrl+J</kbd></button>
+            <button data-action="maximizeSimulation"><span>Maximizar simulador</span><kbd>Shift+F11</kbd></button>
+          </div>
+        </div>
+        <div class="menu">
+          <button class="menu-trigger" data-menu="helpMenu">Ayuda</button>
+          <div id="helpMenu" class="menu-popover align-right">
+            <button data-action="showCodes"><span>Biblioteca de códigos</span></button>
+            <button data-action="shortcuts"><span>Atajos y controles 3D</span></button>
+            <button data-action="about"><span>Acerca de FANUC Forge</span></button>
+          </div>
+        </div>
+      </nav>
+
+      <div class="quick-actions">
+        <button class="icon-button" data-action="undo" title="Deshacer (Ctrl+Z)">↶</button>
+        <button class="icon-button" data-action="redo" title="Rehacer (Ctrl+Y)">↷</button>
+        <button class="validate-button" data-action="compile">✓ Validar</button>
+        <button class="run-button" data-action="play">▶ Ejecutar</button>
+      </div>
+    </header>
+
+    <main class="main-area">
+      <section class="workbench" id="workbench">
+        <article class="editor-panel panel" id="editorPanel">
+          <header class="panel-titlebar">
+            <div class="document-title"><span class="file-dot"></span><strong id="programName">programa_fanuc.nc</strong><span id="dirtyMark" class="dirty-mark hidden">●</span></div>
+            <div class="panel-tools">
+              <button data-action="format" title="Formatear">Formatear</button>
+              <button data-action="compile" class="primary-soft">Validar</button>
+            </div>
+          </header>
+          <div id="autocomplete" class="autocomplete hidden" role="listbox" aria-label="Sugerencias de autocompletado"></div>
+          <div class="editor-shell" id="editorShell">
+            <div id="lineNumbers" class="line-numbers" aria-hidden="true"></div>
+            <textarea id="codeEditor" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Editor de programa FANUC"></textarea>
+            <div id="dropOverlay" class="drop-overlay hidden">Suelta aquí tu archivo .NC, .TXT, .TAP o proyecto .FFCNC</div>
+          </div>
+          <footer class="editor-status">
+            <span id="cursorStatus">Ln 1, Col 1</span>
+            <span id="selectionStatus">Sin selección</span>
+            <span>UTF-8</span>
+            <span id="parseStatus" class="status-ok">Listo</span>
+          </footer>
+        </article>
+
+        <div id="mainSplitter" class="splitter" title="Arrastra para cambiar el tamaño"></div>
+
+        <article class="sim-panel panel" id="simPanel">
+          <header class="sim-toolbar">
+            <div class="transport compact-transport">
+              <button data-action="reset" title="Reiniciar">↺</button>
+              <button data-action="step" title="Bloque a bloque (F10)">▮▶</button>
+              <button data-action="play" class="play-compact" title="Ejecutar (F5)">▶</button>
+              <button data-action="pause" title="Pausar">Ⅱ</button>
+            </div>
+            <div class="display-modes" aria-label="Modo de simulación">
+              <button data-display="3d" class="active">3D</button>
+              <button data-display="2d">2D</button>
+            </div>
+            <button class="toolbar-button" data-action="fitView" title="Encuadrar mesa y trayectoria (F)">Mesa</button>
+            <button class="toolbar-button" data-action="fitStock" title="Enfocar solamente la pieza">Pieza</button>
+            <label class="toolbar-select small-hide">Calidad<select id="renderQuality"><option value="low">Baja</option><option value="medium" selected>Media</option><option value="high">Alta</option><option value="ultra">Ultra</option></select></label>
+            <label class="mini-toggle"><input id="showRapids" type="checkbox" checked><span></span>Rápidos</label>
+            <label class="mini-toggle"><input id="showGrid" type="checkbox" checked><span></span>Cuadrícula</label>
+            <label class="mini-toggle"><input id="showTable" type="checkbox" checked><span></span>Mesa</label>
+            <label class="speed-control">Velocidad<input id="speedRange" type="range" min="1" max="100" value="35"><output id="speedOut">35×</output></label>
+            <button class="icon-button expand-button" data-action="maximizeSimulation" title="Maximizar simulador">⛶</button>
+          </header>
+          <div class="canvas-wrap">
+            <canvas id="simCanvas" aria-label="Simulación CNC 3D y trazo 2D"></canvas>
+            <div class="canvas-hud hud-left">
+              <div><span>X</span><b id="hudX">0.000</b></div>
+              <div><span>Y</span><b id="hudY">0.000</b></div>
+              <div><span>Z</span><b id="hudZ">0.000</b></div>
+            </div>
+            <div class="canvas-hud hud-right">
+              <div><span>WCS</span><b id="hudWcs">G54</b></div>
+              <div><span>Modo</span><b id="hudMode">G90</b></div>
+              <div><span>Unidad</span><b id="hudUnits">mm</b></div>
+            </div>
+            <div class="camera-help">Arrastra: rotar · Shift/ botón derecho: mover · Rueda: zoom · Doble clic: encuadrar</div>
+            <div id="alarmBanner" class="alarm-banner hidden"></div>
+          </div>
+          <footer class="machine-strip">
+            <div><span>Bloque</span><b id="stateBlock">—</b></div>
+            <div><span>Movimiento</span><b id="stateMotion">G00</b></div>
+            <div><span>Avance</span><b id="stateFeed">0</b></div>
+            <div><span>Husillo</span><b id="stateSpindle">OFF</b></div>
+            <div><span>RPM</span><b id="stateRpm">0</b></div>
+            <div><span>Refrigerante</span><b id="stateCoolant">OFF</b></div>
+            <div><span>Herramienta</span><b id="stateTool">T0</b></div>
+          </footer>
+        </article>
+      </section>
+
+      <section id="bottomDock" class="bottom-dock panel">
+        <header class="dock-tabs">
+          <button class="dock-tab active" data-dock="diagnostics">Diagnóstico <span id="alarmCount" class="badge">0</span></button>
+          <button class="dock-tab" data-dock="variables">Variables Macro</button>
+          <button class="dock-tab" data-dock="codes">Códigos FANUC <span id="codeCount" class="badge neutral">0</span></button>
+          <button class="dock-tab" data-dock="trace">Traza</button>
+          <button class="dock-collapse" data-action="toggleDock" title="Ocultar panel">⌄</button>
+        </header>
+        <div id="diagnosticsPane" class="dock-pane active"><div id="diagnostics" class="diagnostics"><div class="empty-state">Valida el programa para revisar alarmas y advertencias.</div></div></div>
+        <div id="variablesPane" class="dock-pane">
+          <div class="dock-filter"><input id="variableFilter" placeholder="Filtrar #100, #500…"><button id="addVariableBtn">Asignar variable</button></div>
+          <div id="variablesTable" class="variables-grid"></div>
+        </div>
+        <div id="codesPane" class="dock-pane">
+          <div class="dock-filter code-filters"><input id="codeFilter" placeholder="Buscar G83, G54.1, WHILE, corrector…"><select id="categoryFilter"><option value="">Todas las categorías</option></select><select id="supportFilter"><option value="">Todo el catálogo</option><option value="full">Simulado</option><option value="partial">Parcial</option><option value="reference">Referencia</option></select></div>
+          <div class="catalog-note">La disponibilidad exacta depende del modelo FANUC, opciones instaladas y fabricante de la máquina. Los códigos M pueden ser personalizados por el constructor.</div>
+          <div id="codeDictionary" class="code-dictionary"></div>
+        </div>
+        <div id="tracePane" class="dock-pane"><pre id="traceLog">Sin ejecución.</pre></div>
+      </section>
+    </main>
+
+    <footer class="global-statusbar">
+      <span id="statusMessage">Preparado</span>
+      <span id="stockSummary">Mesa 600 × 400 · Pieza 220 × 120 × 30 mm</span>
+      <span id="offsetSummary">G54 X0 Y0 Z0</span>
+      <span id="toolSummary">T3 Ø10 H50</span>
+      <span class="status-spacer"></span>
+      <span>FANUC Forge Studio v4.3</span>
+    </footer>
+  </div>
+
+  <input id="programFileInput" type="file" accept=".nc,.tap,.txt,.cnc,.gcode" hidden>
+  <input id="projectFileInput" type="file" accept=".ffcnc,.json" hidden>
+
+  <dialog id="stockDialog" class="app-dialog wide-dialog">
+    <form method="dialog" class="dialog-card">
+      <header><div><span class="eyebrow">ESPACIO DE TRABAJO</span><h2>Mesa, pieza y unidades</h2></div><button class="dialog-close" value="cancel">×</button></header>
+      <div class="dialog-body">
+        <div class="workspace-header">
+          <div><strong>Modelo en coordenadas máquina</strong><span>La mesa define el área disponible y la pieza puede colocarse libremente sobre ella.</span></div>
+          <label class="unit-selector">Unidad de configuración<select id="stockUnit"><option value="mm">Milímetros (mm)</option><option value="in">Pulgadas (in)</option></select></label>
+        </div>
+        <div class="form-section"><h3>Mesa de la fresadora</h3><div class="form-grid four"><label>Largo X <span class="unit-mark">(mm)</span><input id="tableX" class="stock-length" type="number" min="1" step="1" value="600"></label><label>Ancho Y <span class="unit-mark">(mm)</span><input id="tableY" class="stock-length" type="number" min="1" step="1" value="400"></label><label>Espesor <span class="unit-mark">(mm)</span><input id="tableZ" class="stock-length" type="number" min="1" step="1" value="40"></label><label>Superficie Z máquina <span class="unit-mark">(mm)</span><input id="tableTopZ" class="stock-length" type="number" step="0.001" value="-30"></label></div><p class="help-text">La mesa está centrada en X0 Y0. La superficie Z define su altura en coordenadas máquina.</p></div>
+        <div class="form-section"><h3>Dimensiones de la pieza</h3><div class="form-grid three"><label>Largo X <span class="unit-mark">(mm)</span><input id="stockX" class="stock-length" type="number" min="0.001" step="1" value="220"></label><label>Ancho Y <span class="unit-mark">(mm)</span><input id="stockY" class="stock-length" type="number" min="0.001" step="1" value="120"></label><label>Espesor Z <span class="unit-mark">(mm)</span><input id="stockZ" class="stock-length" type="number" min="0.001" step="1" value="30"></label></div></div>
+        <div class="form-section"><h3>Posición de la pieza sobre la mesa</h3><div class="form-grid three"><label>Referencia visual<select id="zeroMode"><option value="center">Centro de la cara superior</option><option value="corner">Esquina inferior izquierda</option></select></label><label>Posición X máquina <span class="unit-mark">(mm)</span><input id="stockPosX" class="stock-length" type="number" step="0.001" value="0"></label><label>Posición Y máquina <span class="unit-mark">(mm)</span><input id="stockPosY" class="stock-length" type="number" step="0.001" value="0"></label></div><div class="button-row"><button id="centerStockBtn" type="button">Centrar pieza en la mesa</button><button id="syncG54Btn" type="button">Copiar origen de pieza a G54</button></div><label class="check-row"><input id="syncG54OnApply" type="checkbox" checked><span>Actualizar G54 automáticamente al aplicar esta configuración</span></label><p id="piecePositionInfo" class="help-text"></p></div>
+        <div class="form-section"><h3>Calidad de simulación</h3><div class="form-grid two"><label>Resolución de remoción<select id="resolution"><option value="1.5">Muy alta · 1.5 mm</option><option value="2">Alta · 2 mm</option><option value="3" selected>Media · 3 mm</option><option value="5">Rápida · 5 mm</option></select></label><label>Visualización de mesa<select id="tableSlotDirection"><option value="x">Ranuras T paralelas a X</option><option value="y">Ranuras T paralelas a Y</option></select></label></div><p class="help-text">La simulación se calcula internamente en milímetros, aunque configures y programes en pulgadas.</p></div>
+      </div>
+      <footer><button value="cancel">Cancelar</button><button id="applyStockBtn" value="default" class="primary">Aplicar espacio de trabajo</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="offsetDialog" class="app-dialog wide-dialog">
+    <form method="dialog" class="dialog-card">
+      <header><div><span class="eyebrow">COORDENADAS</span><h2>Ceros de pieza G54–G59</h2></div><button class="dialog-close" value="cancel">×</button></header>
+      <div class="dialog-body">
+        <div class="offset-layout">
+          <div id="offsetList" class="offset-list"></div>
+          <div class="offset-editor">
+            <div class="offset-selected"><span>Sistema activo en el editor</span><strong id="offsetEditingTitle">G54</strong></div>
+            <div class="form-grid three"><label>X máquina<input id="offsetX" type="number" step="0.001" value="0"></label><label>Y máquina<input id="offsetY" type="number" step="0.001" value="0"></label><label>Z máquina<input id="offsetZ" type="number" step="0.001" value="0"></label></div>
+            <div class="button-row"><button id="setZeroHereBtn" type="button">Usar posición actual como cero</button><button id="zeroOffsetBtn" type="button">Poner X/Y/Z en cero</button></div>
+            <p class="help-text">El offset desplaza el origen del programa respecto al cero máquina. Selecciona otro sistema en la lista para editarlo.</p>
+          </div>
+        </div>
+      </div>
+      <footer><button value="cancel">Cerrar</button><button id="applyOffsetBtn" value="default" class="primary">Guardar cambios</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="toolDialog" class="app-dialog wide-dialog">
+    <form method="dialog" class="dialog-card">
+      <header><div><span class="eyebrow">HERRAMIENTAS</span><h2>Biblioteca de cortadores</h2></div><button class="dialog-close" value="cancel">×</button></header>
+      <div class="dialog-body">
+        <div class="tool-layout">
+          <div class="tool-preview large"><div id="toolIcon" class="tool-icon flat"></div><div><strong id="toolTitle">T3 · Fresa plana Ø10 mm</strong><span id="toolDescription">Geometría usada tanto en la trayectoria como en la remoción de material.</span></div></div>
+          <div class="form-section tool-library-section"><h3>Seleccionar cortador común</h3><div class="form-grid three"><label>Número T<input id="toolNumber" type="number" min="1" max="999" step="1" value="3"></label><label>Sistema de medidas<select id="toolUnit"><option value="mm">Métrico (mm)</option><option value="in">Imperial (in)</option></select></label><label>Biblioteca<select id="toolPreset"></select></label></div><p id="toolPresetInfo" class="help-text"></p></div>
+          <div class="form-section"><h3>Geometría del cortador</h3><div class="form-grid four"><label>Tipo<select id="toolType"><option value="flat">Fresa plana</option><option value="ball">Fresa de punta bola</option><option value="face">Fresa de planeado</option><option value="drill">Broca</option><option value="chamfer">Avellanador / chaflán</option></select></label><label>Nombre<input id="toolName" type="text" value="Fresa plana Ø10 mm"></label><label>Diámetro Ø <span id="toolUnitMark">(mm)</span><input id="toolDiameter" type="number" min="0.001" step="0.001" value="10"></label><label>Longitud visible <span id="toolLengthUnitMark">(mm)</span><input id="toolLength" type="number" min="0" step="0.001" value="50"></label></div><div id="toolAngleRow" class="form-grid two hidden-field"><label>Ángulo incluido (grados)<input id="toolAngle" type="number" min="10" max="180" step="1" value="90"></label><div class="tool-note">Se usa para aproximar la punta de brocas y cortadores de chaflán.</div></div><p class="help-text">Elige un cortador de la biblioteca o selecciona “Personalizado” para editar libremente todas sus medidas.</p></div>
+        </div>
+      </div>
+      <footer><button value="cancel">Cancelar</button><button id="applyToolBtn" value="default" class="primary">Guardar en el número T</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="variableDialog" class="app-dialog small-dialog">
+    <form method="dialog" class="dialog-card">
+      <header><div><span class="eyebrow">MACRO B</span><h2>Asignar variable</h2></div><button class="dialog-close" value="cancel">×</button></header>
+      <div class="dialog-body"><div class="form-grid two"><label>Número<input id="dialogVarNumber" type="number" min="1" max="99999" value="100"></label><label>Valor<input id="dialogVarValue" type="number" step="any" value="0"></label></div></div>
+      <footer><button value="cancel">Cancelar</button><button id="confirmVariableBtn" value="default" class="primary">Asignar</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="infoDialog" class="app-dialog info-dialog">
+    <form method="dialog" class="dialog-card">
+      <header><div><span class="eyebrow">FANUC FORGE</span><h2 id="infoDialogTitle">Información</h2></div><button class="dialog-close" value="cancel">×</button></header>
+      <div id="infoDialogBody" class="dialog-body prose"></div>
+      <footer><button value="default" class="primary">Entendido</button></footer>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+  <script type="module" src="js/app.js?v=4.3.0"></script>
+</body>
+</html>
