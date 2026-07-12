@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 <div align="center">
 
 <img src="assets/logo.png" alt="FANUC Forge" width="150">
