@@ -9,28 +9,29 @@ export class StockSimulator{
     this.viewMode='3d';
     this.renderQuality='medium';
     this.showRapids=true;
+    this.showCuts=true;
     this.showGrid=true;
     this.showTable=true;
     this.showToolpath=true;
     this.showStock=true;
     this.focusTarget='scene';
-    this.currentTool={diameter:10,length:70,type:'flat',name:'Fresa plana Ø10 mm',angle:90};
+    this.currentTool={diameter:3,length:45,type:'flat',name:'Fresa plana Ø3 mm',angle:90};
     this.camera={yaw:-45*Math.PI/180,pitch:35*Math.PI/180,zoom:1,panX:0,panY:0};
     this.drag=null;
     this.cutMarks=[];
     this.resizeObserver=new ResizeObserver(()=>this.resize());
     this.resizeObserver.observe(canvas);
     this.bindCameraControls();
-    this.configure({units:'mm',x:220,y:120,z:30,resolution:3,renderQuality:'medium',zeroMode:'center',position:{x:0,y:0},table:{x:600,y:400,z:40,topZ:-30,slotDirection:'x'}});
+    this.configure({units:'mm',x:220,y:120,z:30,resolution:1.5,renderQuality:'high',zeroMode:'corner',position:{x:0,y:0},table:{x:600,y:400,z:40,topZ:-30,slotDirection:'x'}});
     this.setPath([]);
   }
 
   qualitySettings(level=this.renderQuality){
     return {
-      low:{tileBudget:1800,circleSegments:12,pathStep:.9,markLimit:220},
+      low:{tileBudget:1200,circleSegments:12,pathStep:1.0,markLimit:220},
       medium:{tileBudget:3200,circleSegments:18,pathStep:.65,markLimit:360},
-      high:{tileBudget:5200,circleSegments:26,pathStep:.42,markLimit:520},
-      ultra:{tileBudget:8600,circleSegments:36,pathStep:.28,markLimit:700}
+      high:{tileBudget:6800,circleSegments:28,pathStep:.38,markLimit:520},
+      ultra:{tileBudget:12500,circleSegments:42,pathStep:.24,markLimit:700}
     }[level]||{tileBudget:3200,circleSegments:18,pathStep:.65,markLimit:360};
   }
 
@@ -297,11 +298,12 @@ export class StockSimulator{
       for(let i=0;i<this.path.length;i++){
         const s=this.path[i];if(s.kind!=='move')continue;
         const radius=Math.max(.1,(s.diameter||this.currentTool.diameter||10)/2),xy=Math.hypot(s.to.x-s.from.x,s.to.y-s.from.y);
-        if(/^G(?:73|74|76|8[1-9])$/.test(s.cycle||'')&&s.cut&&xy<=Math.max(.03,radius*.12)&&s.to.z<s.from.z){
+        if(this.showCuts&&/^G(?:73|74|76|8[1-9])$/.test(s.cycle||'')&&s.cut&&xy<=Math.max(.03,radius*.12)&&s.to.z<s.from.z){
           const key=`${s.to.x.toFixed(3)}:${s.to.y.toFixed(3)}:${radius.toFixed(3)}`;
           drillSites.set(key,{x:s.to.x,y:s.to.y,radius});
         }
         if(s.type==='G00'&&!this.showRapids)continue;
+        if(s.type!=='G00'&&!this.showCuts)continue;
         const a=this.project2D(s.from.x,s.from.y),b=this.project2D(s.to.x,s.to.y);
         if(Math.hypot(b.x-a.x,b.y-a.y)<.35)continue;
         if(s.type==='G00'){
@@ -370,21 +372,72 @@ export class StockSimulator{
     c.lineCap='butt';
   }
 
+  surfacePoint(i,j,b=this.stockBounds()){
+    const ii=clamp(i,0,this.nx-1),jj=clamp(j,0,this.ny-1),x=Math.min(b.maxX,b.minX+ii*this.cfg.resolution),y=Math.min(b.maxY,b.minY+jj*this.cfg.resolution);
+    return{x,y,z:b.maxZ-this.depth[jj*this.nx+ii]};
+  }
+
+  surfaceNormal(i,j,b=this.stockBounds()){
+    const il=Math.max(0,i-1),ir=Math.min(this.nx-1,i+1),jd=Math.max(0,j-1),ju=Math.min(this.ny-1,j+1),left=this.surfacePoint(il,j,b),right=this.surfacePoint(ir,j,b),down=this.surfacePoint(i,jd,b),up=this.surfacePoint(i,ju,b),dx=Math.max(.001,right.x-left.x),dy=Math.max(.001,up.y-down.y),dzdx=(right.z-left.z)/dx,dzdy=(up.z-down.z)/dy;
+    const n={x:-dzdx,y:-dzdy,z:1},length=Math.hypot(n.x,n.y,n.z)||1;return{x:n.x/length,y:n.y/length,z:n.z/length};
+  }
+
+  surfaceColor(normal,depthRatio=0){
+    const light={x:-.34,y:-.42,z:.84},view=this.basis().dir;
+    const lambert=Math.max(0,normal.x*light.x+normal.y*light.y+normal.z*light.z);
+    const hx=light.x+view.x,hy=light.y+view.y,hz=light.z+view.z,hl=Math.hypot(hx,hy,hz)||1;
+    const spec=Math.pow(Math.max(0,normal.x*hx/hl+normal.y*hy/hl+normal.z*hz/hl),28);
+    const ambient=.64,shade=(ambient+.40*lambert)*(1-.055*clamp(depthRatio,0,1)),base=[214,173,64];
+    return`rgb(${Math.round(clamp(base[0]*shade+255*spec*.12,0,255))},${Math.round(clamp(base[1]*shade+241*spec*.10,0,255))},${Math.round(clamp(base[2]*shade+185*spec*.07,0,255))})`;
+  }
+
+  faceNormal(points){
+    const a=points[0],b=points[1],c=points[2],u={x:b.x-a.x,y:b.y-a.y,z:b.z-a.z},v={x:c.x-a.x,y:c.y-a.y,z:c.z-a.z},n={x:u.y*v.z-u.z*v.y,y:u.z*v.x-u.x*v.z,z:u.x*v.y-u.y*v.x},length=Math.hypot(n.x,n.y,n.z)||1;return{x:n.x/length,y:n.y/length,z:n.z/length};
+  }
+
   drawStock(){
-    const c=this.ctx,b=this.stockBounds();
-    this.drawBox(b,{top:'#d5ad3f',front:'#6f541c',right:'#5a461c',back:'#644b19',left:'#78591d',bottom:'#352c1a'},'rgba(255,210,31,.20)');
-    const profile=this.qualitySettings();
-    const cells=(this.nx-1)*(this.ny-1),stride=Math.max(1,Math.ceil(Math.sqrt(cells/profile.tileBudget))),tiles=[];
+    const c=this.ctx,b=this.stockBounds(),profile=this.qualitySettings(),cells=(this.nx-1)*(this.ny-1),stride=Math.max(1,Math.ceil(Math.sqrt(cells/profile.tileBudget))),faces=[],removedLimit=this.cfg.z-Math.max(.08,this.cfg.resolution*.12);
+    const isRemoved=(i,j)=>this.depth[clamp(j,0,this.ny-1)*this.nx+clamp(i,0,this.nx-1)]>=removedLimit;
+    const averageNormal=(normals)=>{const n=normals.reduce((acc,v)=>({x:acc.x+v.x,y:acc.y+v.y,z:acc.z+v.z}),{x:0,y:0,z:0}),length=Math.hypot(n.x,n.y,n.z)||1;return{x:n.x/length,y:n.y/length,z:n.z/length};};
+    const pushSurface=(pts,normals,avgDepth)=>faces.push({pts,color:this.surfaceColor(averageNormal(normals),avgDepth/Math.max(.001,this.cfg.z)),stroke:null,depth:pts.reduce((sum,p)=>sum+this.rawProjection(p).depth,0)/pts.length});
     for(let j=0;j<this.ny-1;j+=stride)for(let i=0;i<this.nx-1;i+=stride){
-      const i2=Math.min(this.nx-1,i+stride),j2=Math.min(this.ny-1,j+stride),x1=b.minX+i*this.cfg.resolution,x2=Math.min(b.maxX,b.minX+i2*this.cfg.resolution),y1=b.minY+j*this.cfg.resolution,y2=Math.min(b.maxY,b.minY+j2*this.cfg.resolution);
-      const d1=this.depth[j*this.nx+i],d2=this.depth[j*this.nx+i2],d3=this.depth[j2*this.nx+i2],d4=this.depth[j2*this.nx+i];
-      const pts=[{x:x1,y:y1,z:b.maxZ-d1},{x:x2,y:y1,z:b.maxZ-d2},{x:x2,y:y2,z:b.maxZ-d3},{x:x1,y:y2,z:b.maxZ-d4}],avg=(d1+d2+d3+d4)/4;
-      tiles.push({pts,avg,depth:pts.reduce((sum,p)=>sum+this.rawProjection(p).depth,0)/4});
+      const i2=Math.min(this.nx-1,i+stride),j2=Math.min(this.ny-1,j+stride),p00=this.surfacePoint(i,j,b),p10=this.surfacePoint(i2,j,b),p11=this.surfacePoint(i2,j2,b),p01=this.surfacePoint(i,j2,b),n00=this.surfaceNormal(i,j,b),n10=this.surfaceNormal(i2,j,b),n11=this.surfaceNormal(i2,j2,b),n01=this.surfaceNormal(i,j2,b),d00=b.maxZ-p00.z,d10=b.maxZ-p10.z,d11=b.maxZ-p11.z,d01=b.maxZ-p01.z,r00=isRemoved(i,j),r10=isRemoved(i2,j),r11=isRemoved(i2,j2),r01=isRemoved(i,j2);
+      if(r00&&r10&&r11&&r01)continue;
+      if(!r00&&!r10&&!r11&&!r01){
+        pushSurface([p00,p10,p11,p01],[n00,n10,n11,n01],(d00+d10+d11+d01)/4);
+      }else{
+        if(!(r00&&r10&&r11))pushSurface([p00,p10,p11],[n00,n10,n11],(d00+d10+d11)/3);
+        if(!(r00&&r11&&r01))pushSurface([p00,p11,p01],[n00,n11,n01],(d00+d11+d01)/3);
+      }
     }
-    tiles.sort((a,d)=>a.depth-d.depth);
-    for(const t of tiles){const ratio=clamp(t.avg/this.cfg.z,0,1),r=Math.round(211-106*ratio),g=Math.round(173-96*ratio),bl=Math.round(63-25*ratio);this.drawPoly(t.pts,`rgb(${r},${g},${bl})`,ratio>.02?'rgba(55,70,77,.20)':null);}
+    const sideColor=(normal,base)=>{const light={x:-.34,y:-.42,z:.84},l=.56+.34*Math.max(0,normal.x*light.x+normal.y*light.y+normal.z*light.z);return`rgb(${Math.round(base[0]*l)},${Math.round(base[1]*l)},${Math.round(base[2]*l)})`;};
+    const pushSide=(pts,base=[135,100,38])=>{const normal=this.faceNormal(pts);faces.push({pts,color:sideColor(normal,base),stroke:null,depth:pts.reduce((sum,p)=>sum+this.rawProjection(p).depth,0)/pts.length});};
+    for(let i=0;i<this.nx-1;i+=stride){
+      const i2=Math.min(this.nx-1,i+stride),f1=this.surfacePoint(i,0,b),f2=this.surfacePoint(i2,0,b),bk1=this.surfacePoint(i,this.ny-1,b),bk2=this.surfacePoint(i2,this.ny-1,b);
+      if(!(isRemoved(i,0)&&isRemoved(i2,0)))pushSide([f1,f2,{x:f2.x,y:f2.y,z:b.minZ},{x:f1.x,y:f1.y,z:b.minZ}]);
+      if(!(isRemoved(i,this.ny-1)&&isRemoved(i2,this.ny-1)))pushSide([bk2,bk1,{x:bk1.x,y:bk1.y,z:b.minZ},{x:bk2.x,y:bk2.y,z:b.minZ}],[124,91,34]);
+    }
+    for(let j=0;j<this.ny-1;j+=stride){
+      const j2=Math.min(this.ny-1,j+stride),l1=this.surfacePoint(0,j,b),l2=this.surfacePoint(0,j2,b),r1=this.surfacePoint(this.nx-1,j,b),r2=this.surfacePoint(this.nx-1,j2,b);
+      if(!(isRemoved(0,j)&&isRemoved(0,j2)))pushSide([l2,l1,{x:l1.x,y:l1.y,z:b.minZ},{x:l2.x,y:l2.y,z:b.minZ}],[140,103,39]);
+      if(!(isRemoved(this.nx-1,j)&&isRemoved(this.nx-1,j2)))pushSide([r1,r2,{x:r2.x,y:r2.y,z:b.minZ},{x:r1.x,y:r1.y,z:b.minZ}],[116,86,35]);
+    }
+    faces.sort((a,d)=>a.depth-d.depth);for(const face of faces)this.drawPoly(face.pts,face.color,face.stroke,0);
+    this.drawRemovedBoundaries3D(stride,b,removedLimit);
     this.drawCutMarks3D();
     const o=this.cfg.position,p=this.projection(o.x,o.y,b.maxZ+.3);c.fillStyle='#fff2a0';c.beginPath();c.arc(p.x,p.y,3.5,0,Math.PI*2);c.fill();c.font='700 9px system-ui';c.fillText('ORIGEN PIEZA',p.x+7,p.y-6);
+  }
+
+  drawRemovedBoundaries3D(stride,b=this.stockBounds(),removedLimit=this.cfg.z-.1){
+    const faces=[],cellDepth=(i,j)=>{const i2=Math.min(this.nx-1,i+stride),j2=Math.min(this.ny-1,j+stride);return(this.depth[j*this.nx+i]+this.depth[j*this.nx+i2]+this.depth[j2*this.nx+i2]+this.depth[j2*this.nx+i])/4;};
+    const removed=(i,j)=>cellDepth(i,j)>=removedLimit;
+    const colorFor=(normal)=>{const l=.58+.25*Math.max(0,normal.x*-.34+normal.y*-.42+normal.z*.84);return`rgb(${Math.round(122*l)},${Math.round(89*l)},${Math.round(34*l)})`;};
+    for(let j=0;j<this.ny-1;j+=stride)for(let i=0;i<this.nx-1;i+=stride){
+      const i2=Math.min(this.nx-1,i+stride),j2=Math.min(this.ny-1,j+stride),current=removed(i,j),x1=b.minX+i*this.cfg.resolution,x2=Math.min(b.maxX,b.minX+i2*this.cfg.resolution),y1=b.minY+j*this.cfg.resolution,y2=Math.min(b.maxY,b.minY+j2*this.cfg.resolution);
+      if(i2<this.nx-1){const other=removed(i2,j);if(current!==other){const remainDepth=current?cellDepth(i2,j):cellDepth(i,j),top=b.maxZ-Math.min(remainDepth,this.cfg.z-.001),x=x2,pts=[{x,y:y1,z:top},{x,y:y2,z:top},{x,y:y2,z:b.minZ},{x,y:y1,z:b.minZ}],normal=this.faceNormal(pts);faces.push({pts,color:colorFor(normal),depth:pts.reduce((s,p)=>s+this.rawProjection(p).depth,0)/4});}}
+      if(j2<this.ny-1){const other=removed(i,j2);if(current!==other){const remainDepth=current?cellDepth(i,j2):cellDepth(i,j),top=b.maxZ-Math.min(remainDepth,this.cfg.z-.001),y=y2,pts=[{x:x1,y,z:top},{x:x2,y,z:top},{x:x2,y,z:b.minZ},{x:x1,y,z:b.minZ}],normal=this.faceNormal(pts);faces.push({pts,color:colorFor(normal),depth:pts.reduce((s,p)=>s+this.rawProjection(p).depth,0)/4});}}
+    }
+    faces.sort((a,d)=>a.depth-d.depth);for(const face of faces)this.drawPoly(face.pts,face.color,null,0);
   }
 
   drawCutWalls3D(stride=1){
@@ -450,7 +503,7 @@ export class StockSimulator{
     const c=this.ctx;if(!this.path?.length)return;
     c.lineCap='round';c.lineJoin='round';
     for(let i=0;i<this.path.length;i++){
-      const s=this.path[i];if(s.kind!=='move'||(s.type==='G00'&&!this.showRapids))continue;
+      const s=this.path[i];if(s.kind!=='move'||(s.type==='G00'&&!this.showRapids)||(s.type!=='G00'&&!this.showCuts))continue;
       const a=this.projection(s.from.x,s.from.y,s.from.z),b=this.projection(s.to.x,s.to.y,s.to.z),done=i<=this.current;
       c.strokeStyle=done?(s.type==='G00'?'rgba(66,199,255,.76)':'rgba(76,255,165,.98)'):(s.type==='G00'?'rgba(66,199,255,.24)':'rgba(226,236,241,.34)');
       c.setLineDash(s.type==='G00'?[6,5]:[]);c.lineWidth=i===this.current?3:1.35;c.shadowColor=i===this.current?'rgba(255,210,31,.35)':'transparent';c.shadowBlur=i===this.current?6:0;c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.stroke();
@@ -459,13 +512,44 @@ export class StockSimulator{
   }
 
   drawTool(){
-    const c=this.ctx,tool=this.currentTool,r=Math.max(.5,(tool.diameter||10)/2),length=Math.max(20,tool.length||50),p=this.projection(this.toolPos.x,this.toolPos.y,this.toolPos.z),top=this.projection(this.toolPos.x,this.toolPos.y,this.toolPos.z+length),rx=this.projection(this.toolPos.x+r,this.toolPos.y,this.toolPos.z),ry=this.projection(this.toolPos.x,this.toolPos.y+r,this.toolPos.z),screenR=Math.max(3,Math.min(38,Math.max(Math.hypot(rx.x-p.x,rx.y-p.y),Math.hypot(ry.x-p.x,ry.y-p.y))));
-    c.strokeStyle='rgba(232,244,250,.92)';c.lineWidth=Math.max(3,Math.min(9,screenR*.45));c.lineCap='round';c.beginPath();c.moveTo(p.x,p.y);c.lineTo(top.x,top.y);c.stroke();
-    c.fillStyle='#ffd21f';c.strokeStyle='#1a1e20';c.lineWidth=1.2;
-    if(tool.type==='ball'){c.beginPath();c.arc(p.x,p.y,screenR,0,Math.PI*2);c.fill();c.stroke();}
-    else if(tool.type==='drill'||tool.type==='chamfer'){c.beginPath();c.moveTo(p.x,p.y);c.lineTo(p.x-screenR,p.y-screenR*.75);c.lineTo(p.x+screenR,p.y-screenR*.75);c.closePath();c.fill();c.stroke();}
-    else{const h=tool.type==='face'?Math.max(6,screenR*.55):Math.max(4,screenR*.35);c.fillRect(p.x-screenR,p.y-h,screenR*2,h);c.strokeRect(p.x-screenR,p.y-h,screenR*2,h);}
-    c.lineCap='butt';
+    const c=this.ctx,tool=this.currentTool,r=Math.max(.5,(tool.diameter||3)/2),length=Math.max(20,tool.length||45),tip=this.projection(this.toolPos.x,this.toolPos.y,this.toolPos.z),upper=this.projection(this.toolPos.x,this.toolPos.y,this.toolPos.z+length),rx=this.projection(this.toolPos.x+r,this.toolPos.y,this.toolPos.z),ry=this.projection(this.toolPos.x,this.toolPos.y+r,this.toolPos.z),screenR=Math.max(2.5,Math.min(42,Math.max(Math.hypot(rx.x-tip.x,rx.y-tip.y),Math.hypot(ry.x-tip.x,ry.y-tip.y))));
+    let vx=upper.x-tip.x,vy=upper.y-tip.y,vlen=Math.hypot(vx,vy)||1;vx/=vlen;vy/=vlen;const nx=-vy,ny=vx;
+    const point=(t,side=0)=>({x:tip.x+vx*vlen*t+nx*side,y:tip.y+vy*vlen*t+ny*side});
+    const polygon=(points,fill,stroke='rgba(15,25,30,.75)',width=1)=>{c.beginPath();c.moveTo(points[0].x,points[0].y);for(let i=1;i<points.length;i++)c.lineTo(points[i].x,points[i].y);c.closePath();if(fill){c.fillStyle=fill;c.fill();}if(stroke){c.strokeStyle=stroke;c.lineWidth=width;c.stroke();}};
+    const body=(t0,t1,w0,w1,fill,stroke)=>polygon([point(t0,-w0),point(t0,w0),point(t1,w1),point(t1,-w1)],fill,stroke,1);
+    const ellipseAt=(t,wide,high,fill,stroke)=>{const p=point(t);c.save();c.translate(p.x,p.y);c.rotate(Math.atan2(vy,vx)+Math.PI/2);c.beginPath();c.ellipse(0,0,wide,high,0,0,Math.PI*2);if(fill){c.fillStyle=fill;c.fill();}if(stroke){c.strokeStyle=stroke;c.lineWidth=1;c.stroke();}c.restore();};
+    const steel=c.createLinearGradient(tip.x-screenR,tip.y,tip.x+screenR,tip.y);steel.addColorStop(0,'#5e727e');steel.addColorStop(.32,'#dce7ec');steel.addColorStop(.56,'#8fa3ad');steel.addColorStop(1,'#40545f');
+    const carbide=c.createLinearGradient(tip.x-screenR,tip.y,tip.x+screenR,tip.y);carbide.addColorStop(0,'#9c7410');carbide.addColorStop(.35,'#ffe86b');carbide.addColorStop(.62,'#d7ad19');carbide.addColorStop(1,'#72530b');
+    const dark=c.createLinearGradient(tip.x-screenR,tip.y,tip.x+screenR,tip.y);dark.addColorStop(0,'#26343c');dark.addColorStop(.5,'#7f919a');dark.addColorStop(1,'#1b2930');
+    c.save();c.lineCap='round';c.lineJoin='round';
+    // Portaherramientas y mango.
+    body(.68,1,Math.max(4,screenR*.55),Math.max(6,screenR*.78),dark,'rgba(220,235,241,.35)');
+    ellipseAt(1,Math.max(6,screenR*.78),Math.max(2,screenR*.22),'#667984','rgba(226,239,244,.42)');
+    body(.27,.72,Math.max(2.2,screenR*.22),Math.max(3.2,screenR*.32),steel,'rgba(235,246,250,.38)');
+    if(tool.type==='face'){
+      body(.06,.30,Math.max(3,screenR*.26),Math.max(3,screenR*.26),steel,'rgba(230,241,246,.4)');
+      ellipseAt(.055,screenR*1.18,Math.max(3,screenR*.30),carbide,'rgba(26,31,33,.88)');
+      const center=point(.052),angle=Math.atan2(vy,vx)+Math.PI/2;
+      for(let i=0;i<6;i++){const a=i/6*Math.PI*2,px=center.x+Math.cos(a)*screenR*.88,py=center.y+Math.sin(a)*screenR*.25;c.save();c.translate(px,py);c.rotate(angle+a);c.fillStyle='#d6dce0';c.fillRect(-2.2,-1.3,4.4,2.6);c.restore();}
+    }else if(tool.type==='ball'){
+      body(.11,.38,screenR*.74,screenR*.48,carbide,'rgba(55,42,9,.92)');
+      c.beginPath();c.arc(tip.x,tip.y,screenR*.78,0,Math.PI*2);c.fillStyle=carbide;c.fill();c.strokeStyle='rgba(48,37,10,.95)';c.lineWidth=1.1;c.stroke();
+      c.strokeStyle='rgba(255,247,184,.58)';c.lineWidth=1;c.beginPath();c.arc(tip.x,tip.y,screenR*.50,-1.1,1.65);c.stroke();
+      for(let i=0;i<2;i++){const a=point(.16+i*.09,-screenR*.58),b=point(.31+i*.06,screenR*.42);c.strokeStyle='rgba(71,51,7,.72)';c.lineWidth=1.15;c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.stroke();}
+    }else if(tool.type==='drill'){
+      body(.13,.55,screenR*.50,screenR*.38,steel,'rgba(42,55,61,.9)');
+      polygon([tip,point(.16,-screenR*.50),point(.16,screenR*.50)],steel,'rgba(37,48,54,.95)',1);
+      for(let i=0;i<3;i++){const a=point(.13+i*.12,-screenR*.46),b=point(.29+i*.12,screenR*.40);c.strokeStyle=i%2?'rgba(32,45,52,.88)':'rgba(235,245,249,.48)';c.lineWidth=1.25;c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.stroke();}
+    }else if(tool.type==='chamfer'){
+      body(.22,.45,screenR*.35,screenR*.28,steel,'rgba(38,50,56,.88)');
+      polygon([tip,point(.24,-screenR*.88),point(.24,screenR*.88)],carbide,'rgba(54,42,9,.92)',1);
+      const a=point(.07,-screenR*.24),b=point(.22,screenR*.70);c.strokeStyle='rgba(255,244,169,.58)';c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.stroke();
+    }else{
+      body(.02,.40,screenR*.72,screenR*.48,carbide,'rgba(53,41,8,.92)');
+      const edge1=point(.02,-screenR*.72),edge2=point(.02,screenR*.72);c.strokeStyle='rgba(255,245,180,.72)';c.lineWidth=1.1;c.beginPath();c.moveTo(edge1.x,edge1.y);c.lineTo(edge2.x,edge2.y);c.stroke();
+      for(let i=0;i<3;i++){const a=point(.05+i*.10,-screenR*.68),b=point(.19+i*.09,screenR*.44);c.strokeStyle=i===1?'rgba(255,248,190,.60)':'rgba(76,54,6,.76)';c.lineWidth=1.05;c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.stroke();}
+    }
+    c.restore();
   }
 
   drawAxes(){

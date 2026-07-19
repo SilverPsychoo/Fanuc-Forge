@@ -1,4 +1,4 @@
-import {evaluateExpression,evaluateCondition} from './expression.js?v=4.0.1';
+import {evaluateExpression,evaluateCondition} from './expression.js?v=4.5.0';
 
 const stripComments=line=>line.replace(/\([^)]*\)/g,'').replace(/;.*/,'').trim().toUpperCase();
 const unitFactor=state=>state.units==='G20'?25.4:1;
@@ -40,7 +40,8 @@ export class FanucInterpreter{
       });
       stack.forEach(w=>this.warn('error',p.lines[w.i].index,`WHILE DO${w.id} sin END${w.id}`));
     }
-    this.pc={program:this.programOrder[0]||'MAIN',index:0};this.syncWork();return this;
+    const main=this.programs.get('MAIN'),mainHasCode=main?.lines.some(line=>line.clean&&!/^O\d+/.test(line.clean));
+    this.pc={program:mainHasCode?'MAIN':(this.programOrder[0]||'MAIN'),index:0};this.syncWork();return this;
   }
 
   warn(type,line,message){this.diagnostics.push({type,line,message});}
@@ -141,7 +142,13 @@ export class FanucInterpreter{
   }
 
   applyG10(words,line){
-    if(Math.trunc(words.L)!==2||words.P===undefined)return;
+    if(Math.trunc(words.L)!==2||words.P===undefined){
+      const hasAxis=['X','Y','Z'].some(axis=>words[axis]!==undefined);
+      this.warn('warning',line,hasAxis
+        ?'G10 no es interpolación lineal: se usa para introducir offsets/datos. ¿Querías escribir G01? En esta versión, G10 L2 P1–P6 edita G54–G59.'
+        :'G10 requiere una variante compatible. Esta versión admite G10 L2 P1–P6 para editar G54–G59.');
+      return;
+    }
     const p=Math.trunc(words.P);if(p<1||p>6){this.warn('warning',line,'G10 L2: esta versión edita P1–P6 (G54–G59)');return;}
     const key=`G${53+p}`,current=this.config.offsets?.[key]||{x:0,y:0,z:0},unit=unitFactor(this.state),next={...current};
     for(const a of ['X','Y','Z'])if(words[a]!==undefined)next[a.toLowerCase()]=words[a]*unit;
@@ -275,11 +282,13 @@ export class FanucInterpreter{
         this.executeCycle(words,line.index,line.clean,cycleCode);this.pc.index++;return this.steps.at(-1)||{kind:'state',line:line.index};
       }
 
-      const motionWords=['X','Y','Z'].some(a=>words[a]!==undefined);
-      if(motionWords){
-        const from={...this.state.machine},to=this.resolveTarget(words,hasG53),motion=this.state.motion;
-        if(motion==='G02'||motion==='G03'){let prev=from;for(const point of this.arcPoints(from,to,motion==='G02',words)){this.addMove(prev,point,motion,words,line.index,line.clean,{arc:true,plane:this.state.plane});prev=point;}}
-        else this.addMove(from,to,motion,words,line.index,line.clean);
+      const motionWords=['X','Y','Z'].some(a=>words[a]!==undefined),motion=this.state.motion;
+      const planeCenterWords={G17:['I','J'],G18:['I','K'],G19:['J','K']}[this.state.plane]||['I','J'];
+      const fullCircle=(motion==='G02'||motion==='G03')&&!motionWords&&planeCenterWords.some(a=>words[a]!==undefined);
+      if(motionWords||fullCircle){
+        const from={...this.state.machine},to=fullCircle?{...from}:this.resolveTarget(words,hasG53);
+        if(motion==='G02'||motion==='G03'){let prev=from;for(const point of this.arcPoints(from,to,motion==='G02',words)){this.addMove(prev,point,motion,words,line.index,line.clean,{arc:true,plane:this.state.plane,fullCircle});prev=point;}}
+        else this.addMove(from,to,motion,words,line.index,line.clean,{plane:this.state.plane});
       }
       this.pc.index++;return {kind:'state',line:line.index};
     }catch(error){this.warn('error',line.index,error.message);this.trace.push(`ALARMA L${line.index}: ${error.message}`);this.pc.index++;return {kind:'error',line:line.index,message:error.message};}
